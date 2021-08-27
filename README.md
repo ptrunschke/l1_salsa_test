@@ -1,4 +1,21 @@
-# Numerical experiments from the paper *"Convergence bounds for nonlinear least squares and applications to tensor recovery"*
+# Convergence bounds for nonlinear least squares and applications to tensor recovery
+![](https://img.shields.io/badge/linux--64-gray?label=platform&labelColor=gray&color=lightgray&style=flat)
+![](https://img.shields.io/github/license/ptrunschke/l1_salsa_test)
+[![arXiv](https://img.shields.io/badge/arXiv-2108.05237-b31b1b.svg)](https://arxiv.org/abs/2108.05237)
+
+
+This repository contains the code for the numerical experiments performed in the paper [**Convergence bounds for nonlinear least squares and applications to tensor recovery**](https://arxiv.org/abs/2108.05237).
+If you find this repository helpful for your work,  please kindly cite the paper.
+<pre>
+@misc{trunschke2021convergence,
+      title={Convergence bounds for nonlinear least squares and applications to tensor recovery}, 
+      author={Philipp Trunschke},
+      year={2021},
+      eprint={2108.05237},
+      archivePrefix={arXiv},
+      primaryClass={math.NA}
+}
+</pre>
 
 
 ## Sample generation
