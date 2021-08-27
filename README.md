@@ -59,7 +59,7 @@ Execute one of the following scripts to replicate the corresponding numerical ex
 
 
 ## Installing all dependencies
-You can run the accompanying bash script to install all dependencies in a new `conda` environment.
+You can run the accompanying bash script to install all dependencies in the new `conda` environment `ENVNAME`.
 ```
-bash install.sh <env_name>
+bash install.sh ENVNAME
 ```
