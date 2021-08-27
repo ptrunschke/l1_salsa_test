@@ -1,7 +1,6 @@
 #!/bin/bash
 ENVNAME="${1}"
 set -e
-set -x
 
 if [ -z "${ENVNAME}" ];
 then
