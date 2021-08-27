@@ -1,0 +1,19 @@
+{
+    "problem": {
+        "name": "darcy"
+    },
+    "fe": {
+        "degree": 1,
+        "mesh": 50
+    },
+    "expansion": {
+        "mean": 0.0,
+        "scale": 0.2779522965244017051270673922432532848716135458434908413850884393,
+        "size": 20,
+        "decay rate": 1.0
+    },
+    "sampling": {
+        "distribution": "normal",
+        "strategy": "sobol"
+    }
+}
