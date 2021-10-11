@@ -176,7 +176,7 @@ for i,numTrainingSamples in enumerate(numTrainingSamplesList):
     salsa_x = tn2tt(xe.load_from_file(salsa_solution_dest))
     errors[i,j+1] = test(salsa_x, "SALSA", verbose)[1]
     dofss[i,j+1] = test(hard_threshold(salsa_x), "SALSA (thresholded)", verbose)[0]
-    
+
     uq_solution_dest = f".cache/{__file__[:-3]}_{d}x{M}_{numTrainingSamples}_uq_ra_adf.xrs"
     uq_x = tn2tt(xe.load_from_file(uq_solution_dest))
     errors[i,j+2] = test(uq_x, "uq_ra_adf", verbose)[1]

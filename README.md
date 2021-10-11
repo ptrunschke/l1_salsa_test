@@ -8,7 +8,7 @@ This repository contains the code for the numerical experiments performed in the
 If you find this repository helpful for your work,  please kindly cite the paper.
 <pre>
 @misc{trunschke2021convergence,
-      title={Convergence bounds for nonlinear least squares and applications to tensor recovery}, 
+      title={Convergence bounds for nonlinear least squares and applications to tensor recovery},
       author={Philipp Trunschke},
       year={2021},
       eprint={2108.05237},

@@ -102,27 +102,6 @@ if __name__ == "__main__":
     assert values.shape == (N,)
     assert basisWeights.shape == (d,)
 
-    # def lambda_bounds(_L, _b, _w):
-    #     return 0, np.max(abs(_L.T @ _b) / _w)
-
-    # lambdas = np.linspace(*lambda_bounds(measures, values, basisWeights), num=500)
-    # coeffs = np.empty((len(lambdas), d))
-    # coeffs[-1] = 0
-    # for e in reversed(range(len(lambdas)-1)):
-    #     coeffs[e] = lasso(measures, values, basisWeights, lambdas[e], _init=coeffs[e+1], _maxIterations=100)
-    # coeff_norm_ls = factors @ abs(coeffs[0])
-    # coeff_norms = np.empty(len(lambdas))
-    # for e in range(len(lambdas)):
-    #     coeff_norms[e] = (factors @ abs(coeffs[e])) / coeff_norm_ls
-
-    # color = plt.cm.magma(np.linspace(0.2,0.8,d))
-    # for j in range(d):
-    #     plt.plot(coeff_norms, coeffs[:,j], label=f"$c_{{{j}}}$", color=color[j])
-    # plt.xlim(0,1)
-    # plt.xlabel(r"$||c(\lambda)||_{w,1}\ /\ ||c(0)||_{w,1}$")
-    # plt.legend(bbox_to_anchor=(1.01, 1))
-    # plt.show()
-
     #NOTE: For large basisWeights 0/basisWeights == nan even though basisWeights != 0.
     model_skl = LassoLarsCV(normalize=False, fit_intercept=False, cv=10).fit(np.nan_to_num(measures / basisWeights[np.newaxis]), values)
     assert not model_skl.normalize and not model_skl.fit_intercept
@@ -193,7 +172,6 @@ if __name__ == "__main__":
     ys = basisval(xs, factors*coefs_norm)
     print(f"Error: {np.linalg.norm(ys - f(xs)):.2e}  {np.max(abs(ys - f(xs))):.2e}")
 
-    #NOTE: Due to CV the norm of the regularization should be irrelevant. -> normalize each regularizationStack-entry to 1
     infty_norms = np.max(abs(measures), axis=0)
     print(f"{np.linalg.norm(infty_norms):.2e} \u2192 1")
     infty_norms /= np.linalg.norm(infty_norms)

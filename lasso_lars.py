@@ -102,7 +102,6 @@ class LarsState(object):
            <https://en.wikipedia.org/wiki/Lasso_(statistics)>`_
 
     """
-    # def __init__(self, X, y, max_features, eps=np.finfo(np.float).eps, verbose=False, X_test=None):
     def __init__(self, X, y, max_features, verbose=False, X_test=None):
         """
         max_features <= max_iter
@@ -163,8 +162,6 @@ class LarsState(object):
         self.L[n_active, :n_active] = self.G[n_active,self.active]  # Y.T@y
         linalg.solve_triangular(self.L[:n_active, :n_active], self.L[n_active, :n_active], lower=1, overwrite_b=True, check_finite=False)  # Solve L@w = Y.T@y. `overwrite_b=True` implies that L[n_active, :n_active] will contain the solution.
 
-    #TODO: write an access method for G! G[:n_active,self.active] kann sich doch keine sau merken.
-
     def check_condition_threshold(self):
         n_active = len(self.active)
         assert np.all(np.isfinite(self.G[:n_active]))
@@ -204,7 +201,6 @@ class LarsState(object):
                 raise ConvergenceWarning("Early stopping the lars path, as every regressor with nonzero covariance would make the system unstable.")
 
             self.prevCData, self.CData = self.CData, abs(self.Cov[C_idx])
-            #TODO: Think about using CData instead of C!
             #NOTE: lars.C can be updated in every step via self.C -= gamma * AA. This however is numerically unstable.
             #      The numerical values of the covariances (y.T @ X @ coef) should all be equal but tend to diverge.
             #      In itself this may not pose a problem. But when these covariances fall below those in self.Cov this means
@@ -215,7 +211,7 @@ class LarsState(object):
 
 
             self.signCov[C_idx] = np.sign(self.Cov[C_idx])
-            self.Cov[C_idx] = 0  #TODO: Anstatt das zu machen könnte ich auch einfach direkt das Element aus self.inactive entfernen, oder? Dann bräuchte man self.signCov nicht mehr...
+            self.Cov[C_idx] = 0
 
             n_active = len(self.active)
 
@@ -235,7 +231,6 @@ class LarsState(object):
             # as described in https://math.stackexchange.com/a/177253/303111 this is just regular Gershgorin theorem applied to the matrix
             # U XTX inv(U) where U is the diagonal matrix with entries U[i,i] = a**i.
             # So in the limit a\to\infty ER goes to R[-1].
-            #TODO: Check the math!
             if n_active > 0:
                 # a = 10.0
                 # R *= a**(-np.arange(n_active+1)[::-1])
@@ -247,15 +242,6 @@ class LarsState(object):
                 if CG >= self.condition_threshold:
                     warnings.warn(f"Regressors in active set degenerate. Skipping one with small relative eigenvalue: {{{C_idx}: {1/CG:.2e}}}.", ConvergenceWarning)
                     continue
-
-            # if n_active > 0:
-            #     L_test = np.zeros((n_active, n_active))
-            #     for _ in range(n_active):
-            #         L_test[_,:_+1] = self.L[_,:_+1]
-            #     assert np.allclose(L_test @ L_test.T, self.G[:n_active,self.active])
-            #     assert np.all(np.diag(L_test[:n_active, :n_active]) > 0)              # This is a feature of our specific construction.
-            #     assert np.allclose(np.linalg.norm(L_test, ord=2), np.max(np.diag(L_test)))
-            #     assert np.allclose(np.linalg.norm(L_test, ord=-2), np.min(np.diag(L_test)))
 
             # Ensure that G and L have the capacity for a new row.
             assert self.G.shape[0] == self.L.shape[0]
@@ -274,7 +260,6 @@ class LarsState(object):
                 self.add_L()
             yTy = self.G[n_active, C_idx]
             wTw = np.linalg.norm(self.L[n_active,:n_active]) ** 2
-            # self.L[n_active, n_active] = max(np.sqrt(max(yTy - wTw, 0)), self.eps)  #TODO: eps? The sklearn documentation states that eps regularizes the Cholesky decomposition. I am not sure of this.
             self.L[n_active, n_active] = np.sqrt(max(yTy - wTw, 0)) + self.tiny
 
             self.coef = np.append(self.coef, 0)
@@ -297,14 +282,6 @@ class LarsState(object):
         This is because LARS adds regressors based on their covariance which is currently the largest among all active regressors.
         It returns a list of all indices that were removed.
         """
-
-        #NOTE: The original idea was that if a regressor corresponds to a too small eigenvalue,
-        #      that regressor is successively swapped down.
-        #      In each swap the eigenvalues of the swapped regressors are displayed.
-        #      If the swap results in an even lower eigenvalue for the regressor that is now on top
-        #      then this regressor has to be removed first.
-        #      This is cumbersome however and therefore the first regressor is simply removed (in a greedy fashion).
-
         idcs_rem = []
         eigs_rem = []
         n_active = len(self.active)
@@ -318,17 +295,6 @@ class LarsState(object):
             cholesky_delete(self.L[:n_active, :n_active], ii)
             for i in range(ii, n_active-1):
                 self.G[i] = self.G[i+1]
-
-            # #TODO: This is equivalent to the cholesky_delete block but prints the eigenvalues after each swap.
-            # swap = linalg.get_blas_funcs('swap', (self.L,))
-            # for i in range(ii, n_active-1):
-            #     print(f"swap({i},{i+1})")
-            #     prev_diag = [self.L[i,i], self.L[i+1,i+1]]
-            #     swap(self.L[i], self.L[i+1])
-            #     swap(self.G[i], self.G[i+1])
-            #     cs = rotg(self.L[i,i:i+2])
-            #     rot(self.L[i+1:,i:i+2].T, cs)
-            #     print(f"    {prev_diag} -> {[L[i,i], L[i+1,i+1]]}")
 
             self.coef = np.delete(self.coef, ii)
             C_idx = self.active.pop(ii)
@@ -417,46 +383,6 @@ def lasso_lars(X, y, alpha, max_iter=500, verbose=False, X_test=None):
 
     for n_iter in range(max_iter):
         if n_iter > 0 and this_alpha <= alpha:
-            # In the first iteration, all alphas are zero, the formula below would make ss a NaN
-            # TODO: a better reason: you want to be able to interpolate!
-
-            # if len(active) == len(prev_active)+1:
-            #     #NOTE: In the previous iteration an index was added.
-            #     assert active[:-1] == prev_active
-            #     prev_coef = np.append(prev_coef, 0)
-            # elif len(active) == 0:
-            #     #NOTE: In the previous iteration an index was removed. (special case)
-            #     assert len(prev_active) == 1
-            #     coef = np.insert(coef, 0, 0)
-            #     active = prev_active
-            # else:
-            #     #NOTE: In the previous iteration an index was removed.
-            #     for idx in range(len(active)):
-            #         if prev_active[idx] != active[idx]: break
-            #     else:
-            #         idx += 1
-            #     #NOTE: prev_active[idx] was removed.
-            #     assert prev_active[:idx] == active[:idx]
-            #     if len(active) == len(prev_active):
-            #         #NOTE: prev_active[idx] was removed and another index was added.
-            #         assert prev_active[idx+1:] == active[idx:-1]
-            #         coef = np.insert(coef, idx, 0)
-            #         prev_coef = np.append(prev_coef, 0)
-            #         active = prev_active + [active[-1]]
-            #     else:
-            #         #NOTE: No other index was added.
-            #         assert prev_active[idx+1:] == active[idx:]
-            #         coef = np.insert(coef, idx, 0)
-            #         active = prev_active
-            
-
-            # new_active = []
-            # active contains new indices only at the end
-            # the only question is where indices have been removed
-
-            # you want all element of prev_active followed by the new elements of active (which are indeed at the end of active)
-
-
             pc = dict(zip(prev_active, prev_coef))
             cc = dict(zip(active, coef))
 
@@ -466,42 +392,6 @@ def lasso_lars(X, y, alpha, max_iter=500, verbose=False, X_test=None):
             for e,idx in enumerate(active):
                 if idx in pc: prev_coef[e] = pc[idx]
                 if idx in cc: coef[e] = cc[idx]
-
-            # if len(prev_active) == 0:
-            #     #NOTE: In the previous iteration indices were added.
-            #     assert len(active) > 0
-            #     prev_active = active
-            #     prev_coef = np.zeros(len(prev_active))
-            # elif len(active) == 0:
-            #     #NOTE: In the previous iteration indices were removed.
-            #     assert len(prev_active) > 0
-            #     active = prev_active
-            #     coef = np.zeros(len(active))
-            # else:
-            #     #NOTE: Indices have been added and removed.
-            #     # Find the first indices that has been added.
-            #     j = len(active)-1
-            #     while active[j] not in prev_active: j -= 1
-            #     j += 1
-
-            #     assert set(active[:j]) <= set(prev_active)           # The active indices that were not added are a subset of the previously active indices.
-            #     assert set(active[j:]).isdisjoint(set(prev_active))  # The active indices that were added must not be contained in the previously active indices.
-
-
-            #     new_active = prev_active + active[j:]
-            #     assert set(new_active) == set(prev_active) + set(active)
-            #     new_coef = np.empty(len(new_active))
-            #     j = 0
-            #     for i in range(len(new_active)):
-            #         if j < len(active) and new_active[i] == active[j]:  # new_active[i] was not removed
-            #             new_coef[i] = coef[j]
-            #             j += 1
-            #         else:                           # new_active[i] was removed
-            #             new_coef[i] = 0
-            #     assert j == len(active)  # ensure that every index has been considered
-            #     active = new_active
-            #     coef = new_coef
-            #     prev_coef = np.concatenate([prev_coef, np.zeros(len(coef)-len(prev_coef))])
 
             coef = prev_coef + (prev_alpha - alpha) / (prev_alpha - this_alpha) * (coef - prev_coef)
             this_alpha = alpha
@@ -544,7 +434,7 @@ def lasso_lars_cv(X, y, min_alpha=np.finfo(np.float64).eps, cv=10, max_iter=5000
     """
     n_samples, n_features = X.shape
     assert np.shape(y) == (n_samples,)
-    assert n_samples % cv == 0  #TODO: ...
+    assert n_samples % cv == 0
     max_features = min(max_iter, n_features)
 
     lars = []
@@ -552,13 +442,6 @@ def lasso_lars_cv(X, y, min_alpha=np.finfo(np.float64).eps, cv=10, max_iter=5000
     residuals = []
     testSetSize = n_samples // cv
     slc = lambda fold: slice(fold*testSetSize, (fold+1)*testSetSize)
-    #TODO: num_samples = 250 and S = 3 == s()
-    #      num_test_samples = 0.1*num_samples == 25
-    #      num_training_samples = (1-0.1)*num_samples == 225 == n()
-    #      --> n_samples = n() * s() == 675
-    #      --> 675 / cv == 67.5
-    #      --> 67 == 3*22 + 1 == s()*22 + 1
-    #      --> 67 % s() != 0
 
     class GramedOperator(object):
         def __init__(self, _operator):
@@ -619,43 +502,6 @@ def lasso_lars_cv(X, y, min_alpha=np.finfo(np.float64).eps, cv=10, max_iter=5000
         assert np.allclose(ret, tmp)
         return ret
 
-
-    # print("""
-    # TODO:
-    #     - add a threshold parameter to LarsState
-    #     - store least_squares and AA (from step()) in an attribute of LarsState
-    #       -> the maximal update to coefs can be estimated as abs(coefs) + C/AA*abs(least_squares)
-    #          if np.any(abs(coefs) < threshold):
-    #              nt = np.count_nonzero(abs(coefs) < threshold)
-    #              ntu = np.count_nonzero(abs(coefs) + C/AA*abs(least_squares) < threshold)
-    #              if nt == ntu: return  # an update with maximal step size would still not make any of the lowest coefficients exceed the threshold
-    #     - every time you drop an inactive index "for good" you need to update the coefs since C = max(abs(Cov)) changes
-    #     - replace the update C -= gamma * AA in step() by a numerically more stable one?
-    #     - add_index should add all (not only one) indices that have the same (maximum) correlation
-    #     - TODO: du willst nicht einfach einen threshold, sondern einen weighted threshold machen!
-    # """)
-
-
-
-    # # res = lambda fold: np.linalg.norm(y[slc(fold)] - X.take_rows(slc(fold)).Xc(lars[fold].active, lars[fold].coef))**2
-    # # res = lambda fold: X.take_rows(slc(fold)).error_norm(y[slc(fold)], lars[fold].active, lars[fold].coef)
-    # #TODO: - res dauert genauso lange wie add_index
-    # #      - add_index wird dominiert von XTX (XTX dauert über 117 mal so lange wie add_L)
-    # #TODO: XTX kann man (maximal) um einen Faktor 10 beschleunigen indem man nicht mehr drop_rows verwendet. 
-    # #      Aber res dauert dann immer noch genau so lange...
-    # #TODO: Was dauert in res so lange?
-    # # Implement functions to increase readability of the cProfile output.
-    # def res(fold):
-    #     def error_norm():
-    #         if X_test is None:
-    #             return X.take_rows(slc(fold)).error_norm(y[slc(fold)], lars[fold].active, lars[fold].coef)
-    #         else:
-    #             ret = X.take_rows(slc(fold)).error_norm(y[slc(fold)], lars[fold].active, lars[fold].coef)
-    #             ret_test = X_test.take_rows(slc(fold)).error_norm(y[slc(fold)], lars[fold].active, lars[fold].coef)
-    #             assert np.allclose(ret, ret_test)
-    #             return ret
-    #     return error_norm()
-
     tmpy = y[testSetSize:].copy()
     for fold in range(cv):
         if X_test is None:
@@ -712,28 +558,9 @@ def lasso_lars_cv(X, y, min_alpha=np.finfo(np.float64).eps, cv=10, max_iter=5000
     all_alphas = np.unique(all_alphas)  # np.unique also sorts
     all_residuals = [np.interp(all_alphas, a[::-1], r[::-1]) for a,r in zip(alphas, residuals)]
 
-    # import matplotlib.pyplot as plt
-    # geom_mean = np.exp(np.mean(np.log(all_residuals), axis=0))
-    # minIdx_gm = np.argmin(geom_mean)
-    # mean = np.mean(all_residuals, axis=0)
-    # minIdx = np.argmin(mean)
-    # fig, ax = plt.subplots(1,1)
-    # axt = ax.twinx()
-    # for idx in range(cv):
-    #     # ax.plot(all_alphas, np.sqrt(all_residuals[idx]), f'C{idx}o--')
-    #     ax.plot(all_alphas, all_residuals[idx], f'C{idx}o--')
-    # ax.plot(all_alphas, geom_mean, color='k', ls='--', lw=2)
-    # ax.plot(all_alphas, mean, color='k', lw=2)
-    # ax.axvline(all_alphas[minIdx], color='k')
-    # ax.axvline(all_alphas[minIdx_gm], color='k', ls='--')
-    # ax.set_xscale('log')
-    # ax.set_yscale('log')
-    # plt.show()
-
     minIdx = np.argmin(np.exp(np.mean(np.log(all_residuals), axis=0)))
-    best_alpha = all_alphas[minIdx]
     # minIdx = np.argmin(np.mean(all_residuals, axis=0))
-    # best_alpha = all_alphas[minIdx]
+    best_alpha = all_alphas[minIdx]
 
     ret = lasso_lars(X, y, best_alpha, max_iter=max_iter//cv, verbose=verbose, X_test=X_test)
     ret.n_iter_ = n_iter

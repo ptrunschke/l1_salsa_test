@@ -1,6 +1,3 @@
-"""
-ADS (Alternating Dantzig Selector)
-"""
 from collections import deque
 from collections.abc import Mapping
 from numbers import Real
@@ -28,18 +25,6 @@ diff = subprocess.check_output(["git", "--no-pager", "diff", "--minimal", "HEAD"
 print("GIT COMMIT:", sha.decode('utf-8'))
 if diff:
     print("GIT DIFF:\n", diff.decode('utf-8'))
-
-"""
-#TODO: diesen Text in das CPP-File und das CPP-File aufräumen
-       - Wenn residual das relative Residuum (Residuum/value_norm) zurückgibt, dann sollte der ls_operator (und die rhs evtl) auch mit 1/value_norm**2 gewichtet sein!
-       - gehe, wenn du smin optimierst, im prinzip wie jetzt vor (damit der Suchraum nicht zu groß wird): starte bei 0.1*omega und verringere smin ggfalls
-
-
-#TODO: Teste SALSA mit Timing und gib auch die Ränge aus, vergleiche mit uq_ra_adf.
-
-
-TODO: Es macht überhaupt keinen Unterschied, ob man das relative oder das absolute Residuum minimiert. Das relative ist nur skaliert...
-"""
 
 
 tensor = lambda arr: xe.Tensor.from_buffer(arr)
@@ -87,13 +72,8 @@ def isometry_constant(M, G):
     return C1
 
 
-#TODO: make solver.alpha, solver.omega and solver.maxTheoreticalRanks inaccessible from outside
 class InternalSolver(object):
     def __init__(self, dimensions, measures, values, weights=None, basisWeights=None, profiler=None):
-        #TODO: We assume that the basis function with multi-index 0 is the constant 1-function.
-        #TODO: rename basisWeights --> l2weights or coefficientWeights
-        #NOTE (documentation): minDecrease --- the decrease you are caring for
-        #NOTE (documentation): trackingPeriodLength (TODO: rename) --- the number of iterations you are willing to wait for that decrease
         assert is_sequence(dimensions)
         assert is_sequence(measures)
         assert is_sequence(values)
@@ -126,13 +106,6 @@ class InternalSolver(object):
             for j in range(S):
                 assert isinstance(values[i][j], Real)
 
-
-        # basisWeights[m] /= np.linalg.norm(basisWeights[m])  #NOTE: Due to CV we can normalize the regularization term to 1.
-        # scale each measures before ...
-        # --> NOTE: in this way you should never reach the point where sth becomes infinite.
-        # wgth = basisWeights[0]
-        # L = np.linalg.cholesky(wgth)
-        # ... #TODO...
         self.basisWeightFactors = []
         for m in range(1,M):
             # || y - measures @ x ||^2 + lmbda x.T @ basisWeights @ x
@@ -151,19 +124,10 @@ class InternalSolver(object):
 
         # ADF parameters
         # minDecrease: minimum decrease of the residual relative to the highest residual in the preceding `trackingPeriodLength` iterations
-        #TODO (documentation): minDecrease is used in two ways:
-        #        - to begin a new alpha cycle
-        #        - to choose a new bestX
-        #      In the first case it ensures ...
-        #      In the second case it ensures that a new bestX is chosen only if it decreases the validation set residual sufficently.
-        #      This reduces the probability that bestX overfits on the validation set by chance.
-        #NOTE: This is not necessary for the alpha cycle nonImprovementCounter.
-        #      With it you want to detect the overfitting phase — i.e. a phase of reliable non-increasing validation set residuals.
         self.minDecrease = 1e-3
         # maxIterations: maximum number of iterations to perform
         self.maxIterations = 1000
 
-        #TODO: documentation
         self.trackingPeriodLength = 10
         self.targetResidual = 1e-8
         self.controlSetFraction = 0.1
@@ -171,13 +135,11 @@ class InternalSolver(object):
         # SALSA parameters
         # maxRanks: user defined list of maximal ranks
         self.maxRanks = [np.inf]*(M-1)
-        #TODO: Implement a setter for maxRanks! Otherwise it is too easy to provide a list of incorrect length and raise a rather mystic error message.
         # maxTheoreticalRanks: list of maximal possible ranks for a tensor with dimensions d
         self.maxTheoreticalRanks = np.minimum(np.cumprod(d[:-1], dtype=object), np.cumprod(d[:0:-1], dtype=object)[::-1])
         # kmin: number of additional ranks used
         self.kmin = 2
         # smin: factor to decide of if singular value is active or inactive
-        # self.smin = 0.2
         self.smin = None  # set after everything other variables are initialized
         self.minSMinFactor = 1e-5
 
@@ -188,7 +150,6 @@ class InternalSolver(object):
 
         # Initialize tensor as a perturbation of the mean of the values.
         # Perturbation has a magnitude of 0.2% of the norm of mean.
-        #TODO: allow for reproducible experiments by providing a random_engine
         self.x = xe.TTTensor.random(d, [1]*(M-1))
         core = np.mean(values, axis=0)
         self.x.set_component(0, tensor(core.reshape(1,S,1)))
@@ -296,7 +257,6 @@ class InternalSolver(object):
         U_row.reinterpret_dimensions(U_row.dimensions + [1])
         U_new.offset_add(U_row, [0]*eU + [U.dimensions[-1]])
 
-        #TODO: Vt has the wrong dimensions in move_right and U has the wrong dimensions in move_left
         # Vt (right singular vectors)
         Vt_new = xe.Tensor(Vt.dimensions + np.array([1] + [0]*eV))
         Vt_new.offset_add(Vt, [0] + [0]*eV)
@@ -331,7 +291,7 @@ class InternalSolver(object):
         core  = self.x.get_component(pos-1)  # new core
 
         right_norm = xe.frob_norm(right)
-        right = right / right_norm  #TODO: prevent ...
+        right = right / right_norm
         (U(i,l), S(l,r), Vt(r,j^2)) << xe.SVD(right(i,j^2))
         S = S * right_norm
 
@@ -552,66 +512,12 @@ class InternalSolver(object):
         eW = np.sqrt(np.diag(self.basisWeights[pos]))
         rW = np.sqrt(np.diag(self.rightRegularizationStack[-1]))
 
-        # #TODO: test empirical normalization
-        # if pos == 0:
-        #     # In this case we do not have empirical measurements. To compute the L-infinity norm we assume that the basis is discrete
-        #     # I.e. we have s many basis functions. For every 0<=k<s the function is constant and equal to eye(1,s,k)[0].
-        #     # Note, that this assumption only holds for UNORTHOGONALIZED P1 basis functions.
-        #     assert l == 1
-        #     lW = np.ones(1)                                                                               # leftStack[0] == ones((n,l))
-        #     eW = np.ones(s)
-        #     rW = np.max(abs(self.rightStack[-1]), axis=0)                                                 # rightStack[-1].shape == (n,r)
-        # else:
-        #     lW = np.max(abs(np.einsum('nls,nls -> nl', self.leftStack[-1], self.leftStack[-1])), axis=0)  # leftStack[-1].shape == (n,l,s)
-        #     eW = np.max(abs(self.measures[pos-1]), axis=0)                                                # measures[pos-1].shape == (n,e)
-        #     rW = np.max(abs(self.rightStack[-1]), axis=0)                                                 # rightStack[-1].shape == (n,r)
-
         if pos == 0:
             assert e == np.shape(self.values)[1]
-            # from abstractOperators import HeadModeOperator
-            # op = HeadModeOperator(xe.Tensor.from_buffer(lOp/lW[np.newaxis]),
-            #                       xe.Tensor.from_buffer(1/eW),
-            #                       xe.Tensor.from_buffer(rOp/rW[np.newaxis]))
             opArr = np.einsum('nl,es,nr -> nsler', lOp, np.eye(e), rOp).reshape(-1, ler)
         else:
-            # eOp = np.asarray(self.measures[pos-1])[self.trainingSet]  # -1 --> the first mode has no measure
             eOp = self.measures[pos-1].to_ndarray()[self.trainingSet]  # -1 --> the first mode has no measure
-            # from abstractOperators import TailModeOperator
-            # op = TailModeOperator(xe.Tensor.from_buffer(lOp/lW[np.newaxis,:,np.newaxis]),
-            #                       xe.Tensor.from_buffer(eOp/eW[np.newaxis]),
-            #                       xe.Tensor.from_buffer(rOp/rW[np.newaxis]))
             opArr = np.einsum('nls,ne,nr -> nsler', lOp, eOp, rOp).reshape(-1, ler)
-
-        # with suspend_profiling(self.profiler):
-        #     if pos == 0:
-        #         from abstractOperators_test import HeadModeOperator as HMO
-        #         op_test = HMO(lOp/lW[np.newaxis], 1/eW, rOp/rW[np.newaxis])
-        #     else:
-        #         from abstractOperators_test import TailModeOperator as TMO
-        #         op_test = TMO(lOp/lW[np.newaxis,:,np.newaxis], eOp/eW[np.newaxis], rOp/rW[np.newaxis])
-        #     assert op.shape == op_test.shape
-        #     for index in np.random.randint(0, op.shape[1], 10):
-        #         # assert np.allclose(op.XTX(index), op_test.XTX(index))
-        #         a,b = op.XTX(index),op_test.XTX(index)
-        #         assert np.linalg.norm(a-b) <= 1e-8 + 1e-5*np.linalg.norm(b)
-        #     for y in np.random.randn(3, op.shape[0]):
-        #         # assert np.allclose(op.XTy(y), op_test.XTy(y), atol=1e-6)
-        #         a,b = op.XTy(y),op_test.XTy(y)
-        #         assert np.linalg.norm(a-b) <= 1e-6 + 1e-5*np.linalg.norm(b)
-        #     for y in np.random.randn(3, op.shape[0]):
-        #         z = np.random.randint(0, op.shape[1])
-        #         indices = np.random.choice(op.shape[1], z, replace=False)
-        #         coefs = np.random.randn(z)
-        #         assert np.allclose(op.error_norm(y, indices, coefs), op_test.error_norm(y, indices, coefs))
-
-        #TODO: implement isometry_constant for operators
-        # Cs_local[pos] = isometry_constant(opArr.reshape(-1, ler), np.diag(basisWeights))
-        # Ks_local[pos] = isometry_constant(opArr.reshape(-1, ler), np.eye(ler))  #TODO: It is not clear if this really gives you the local variation constant! (The offset by the values is missing.)
-        #TODO: then in every solve_local(pos):
-        # alerted = lambda C: f"{C:.2e}" if C < self.unstableIsometryConstant else f"{fg('dark_red_2')}{C:.2e}{attr('reset')}"
-        # Cs_dump = "[" + ", ".join(alerted(C) for C in Cs_local) + "]"
-        # Ks_dump = "[" + ", ".join(alerted(K) for K in Ks_local) + "]"
-        # print(itr_str(iteration) + f"Residuals: trn\u2295\u03C9\u2295\u03B1={trn_str()}, val={val_str()}  |  Local isometry constants: {Cs_dump}  |  Local variation constants: {Ks_dump}  |  Lambdas: {self.lambda_list()}  |  Density: {self.density()}  |  SMin: {disp_smin()}  |  Ranks: {self.frac_ranks()}")
 
         basisWeights = np.einsum('l,e,r -> ler', lW, eW, rW).reshape(-1)
         op_test = opArr/basisWeights[np.newaxis]
@@ -624,52 +530,16 @@ class InternalSolver(object):
         assert op_test.shape == (rhs_size, ler), f"NOT {op_test.shape} == {(rhs_size, ler)}"
         values = self.values[self.trainingSet].reshape(rhs_size)
 
-        # with suspend_profiling(self.profiler):
-        #     if pos == 0:
-        #         assert np.allclose(opArr/basisWeights[np.newaxis],
-        #                            np.einsum('nl,es,nr -> nsler', lOp/lW[np.newaxis], np.diag(1/eW), rOp/rW[np.newaxis]).reshape(-1, ler))
-        #     else:
-        #         assert np.allclose(opArr/basisWeights[np.newaxis],
-        #                            np.einsum('nls,ne,nr -> nsler', lOp/lW[np.newaxis,:,np.newaxis], eOp/eW[np.newaxis], rOp/rW[np.newaxis]).reshape(-1, ler))
-
-        #     # assert op.shape == op_test.shape
-        #     # for index in np.random.randint(0, op.shape[1], 10):
-        #     #     assert np.allclose(op.XTX(index), op_test.XTX(index))
-        #     #     # a,b = op.XTX(index),op_test.XTX(index)
-        #     #     # assert np.linalg.norm(a-b) <= 1e-8 + 1e-5*np.linalg.norm(b)
-        #     # for y in np.random.randn(3, op.shape[0]):
-        #     #     assert np.allclose(op.XTy(y), op_test.XTy(y), atol=1e-6)
-        #     #     # a,b = op.XTy(y),op_test.XTy(y)
-        #     #     # assert np.linalg.norm(a-b) <= 1e-6 + 1e-5*np.linalg.norm(b)
-        #     # for y in np.random.randn(3, op.shape[0]):
-        #     #     z = np.random.randint(0, op.shape[1])
-        #     #     indices = np.random.choice(op.shape[1], z, replace=False)
-        #     #     coefs = np.random.randn(z)
-        #     #     assert np.allclose(op.error_norm(y, indices, coefs), op_test.error_norm(y, indices, coefs))
-
-        #     # model_test = lasso_lars_cv(op_test, values, cv=10)
-        #     # assert model_test.alpha_ >= 0
-        #     # assert len(model_test.active_) > 0  #TODO: Find out why this does not happen!
-        #     # model = model_test
-
-        #     # assert np.allclose(model.alpha_, model_test.alpha_)
-        #     # assert np.all(model.active_ == model_test.active_)
-        #     # assert np.allclose(model.coef_, model_test.coef_)
-
         core = self.x.get_component(pos).to_ndarray()
         core = np.nan_to_num(core)
         core_norm = np.max(abs(core))
         core[abs(core) < 1e-16*core_norm] = 0
 
         if self.microstepSolver == "lasso":
-            # model = lasso_lars_cv(op, values, cv=10, X_test=op_test)
-            # assert model.alpha_ >= 0
-            # assert len(model.active_) > 0  #TODO: Find out why this does not happen!
-
             model = lasso_lars_cv(op_test, values, cv=10)
             assert model.alpha_ >= 0
-            # assert len(model.active_) > 0  #TODO: Find out why this does not happen!
-            if len(model.active_) > 0:  #TODO: dirty bugfix...
+            # assert len(model.active_) > 0
+            if len(model.active_) > 0:  #TODO: quick fix...
                 core = xe.Tensor([ler])
                 assert core.is_sparse()
                 for idx,val in zip(model.active_, model.coef_):
@@ -690,7 +560,7 @@ class InternalSolver(object):
             #NOTE: We can not use `fit_intercept` since we dont know if the local basis contains a constant function.
             model = LassoLarsCV(normalize=False, fit_intercept=False, cv=10).fit(opArr/basisWeights[np.newaxis], values)
             assert not model.normalize and not model.fit_intercept
-            if len(model.active_) != 0:  #TODO: dirty bugfix...
+            if len(model.active_) != 0:  #TODO: quick fix...
                 coefs = model.coef_ / basisWeights
                 core = xe.Tensor.from_buffer(coefs)
                 core.reinterpret_dimensions([l,e,r])
@@ -844,10 +714,6 @@ class InternalSolver(object):
             return "10^[" + ", ".join(disp_float(l) for l in np.rint(np.log10(self.lambdas))) + "]"
 
     def density(self):
-        #TODO: You should not use a LASSO but a group-LASSO: The set of activated external indices schould be small.
-        #      This means that you can define the sparsity of a component as the number of external indices that are zero.
-        #      In this way the sparsity of one component can not change when another component is modified!
-        #TODO: In this way we can also output the sparsity or the weighted sparsity of the core instead of the weightedNorms.
         return "[" + ", ".join(f"{int(100*d+0.5):2d}" for d in self.weightedNorms) + "]%"
 
     def solve(self):
@@ -861,12 +727,6 @@ class InternalSolver(object):
         validationResiduals = []
         initialResidual = self.residual(self.trainingSet)
         prev_bestValidationResidual = self.residual(self.validationSet)
-
-        #TODO: Das Verringern von omega erlaubt es dem solver im Microstep in lokale Minima zu gehen?
-        #      Deswegen kann es sein, dass das test set residuum wieder ansteigt.
-        #      Wenn das passiert, dann ist der löser im Übertraining und man sollte alle kleineren Omegas ignorieren.
-
-        # self.omega = None
 
         itr_str = f"[{{0:{len(str(self.maxIterations))}d}}]  ".format
 
@@ -978,21 +838,10 @@ class InternalSolver(object):
                 print(f"Terminating: SMin deceeds presumed lower influence limit.")
                 break
 
-            # res = trainingResiduals[-1]
-            # self.omega = max(min(self.omega/self.fomega, np.sqrt(res)), res)
-            # assert self.omega >= res  #TODO: SALSA is only stable when omega does not decrease as res (Micha).
-            # self.smin = 0.2*min(self.omega, res)
-            # TODO: adapt smin directly
-
             maxUnsuccessfulRankIncreases = 3
             if np.max(np.array(bestX.ranks()) - np.array(self.x.ranks())) > maxUnsuccessfulRankIncreases:
                 print(f"Terminating: Residual not affected by rank increase.")
                 break
-
-            # if len(trainingResiduals) >= self.trackingPeriodLength and trainingResiduals[-1] > (1-self.minDecrease)*trainingResiduals[0]:
-            #     assert len(trainingResiduals) == self.trackingPeriodLength
-            #     print(f"Terminating: Minimum residual decrease deceeded.")
-            #     break
 
         else:
             print("Terminating: Maximum iterations reached.")
@@ -1003,10 +852,6 @@ class InternalSolver(object):
         print("-"*125)
         print(f"Best validation residual in iteration {bestIteration}.")
         self.x = bestX
-
-        ##TODO: use a round that hard thresholds smin
-        #self.x.round(np.minimum(self.x.ranks(), self.maxRanks).astype(int), self.smin)
-        #assert np.all(self.x.ranks() <= np.asarray(self.maxRanks))
 
         self.finalize()
 

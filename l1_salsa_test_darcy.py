@@ -53,6 +53,9 @@ digits = int(np.ceil(np.log10(len(samples))))+1
 print(f"Number of samples:               {len(samples): >{digits}d}")
 print(f"Max. number of training samples: {max(numTrainingSamplesList): >{digits}d}")
 print(f"Number of test samples:          {numTestSamples: >{digits}d}")
+print("-"*80)
+print(f"Mean:     {np.mean(values):.2e}")
+print(f"Variance: {np.var(values):.2e}")
 
 
 with timeit("Compute measures: {:.2f} s"):
@@ -172,7 +175,7 @@ for i,numTrainingSamples in enumerate(numTrainingSamplesList):
     salsa_x = tn2tt(xe.load_from_file(salsa_solution_dest))
     errors[i,j+1] = test(salsa_x, "SALSA")
     test(hard_threshold(salsa_x), "SALSA (thresholded)")
-    
+
     uq_solution_dest = f".cache/{__file__[:-3]}_{d}x{M}_{numTrainingSamples}_uq_ra_adf.xrs"
     uq_x = tn2tt(xe.load_from_file(uq_solution_dest))
     errors[i,j+2] = test(uq_x, "uq_ra_adf")
