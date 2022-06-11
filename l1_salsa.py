@@ -9,33 +9,40 @@ from scipy.optimize import minimize
 import xerus as xe
 from colored import fg, bg, attr
 from sklearn.linear_model import LassoLarsCV, RidgeCV
-from lasso_lars import lasso_lars_cv
-from lasso_lars_test import SimpleOperator
+from .lasso_lars import lasso_lars_cv
+from .lasso_lars_test import SimpleOperator
 
 from contextlib import contextmanager
+
+
 @contextmanager
 def suspend_profiling(profiler):
-    if profiler is not None: profiler.disable()
+    if profiler is not None:
+        profiler.disable()
     yield
-    if profiler is not None: profiler.enable()
+    if profiler is not None:
+        profiler.enable()
+
 
 import subprocess
+
 sha = subprocess.check_output(["git", "rev-parse", "HEAD"]).strip()
 diff = subprocess.check_output(["git", "--no-pager", "diff", "--minimal", "HEAD", "--", __file__]).strip()
-print("GIT COMMIT:", sha.decode('utf-8'))
+print("GIT COMMIT:", sha.decode("utf-8"))
 if diff:
-    print("GIT DIFF:\n", diff.decode('utf-8'))
+    print("GIT DIFF:\n", diff.decode("utf-8"))
 
 
 tensor = lambda arr: xe.Tensor.from_buffer(arr)
-is_sequence = lambda obj: hasattr(obj, '__len__') and hasattr(obj, '__getitem__')
+is_sequence = lambda obj: hasattr(obj, "__len__") and hasattr(obj, "__getitem__")
 
 countwhile = lambda predicate, iterable: len(list(takewhile(predicate, iterable)))
 
+
 def split_int_frac(a):
     a = str(float(a))
-    i = a.find('.')
-    ai,af = a[:i], a[i+1:]
+    i = a.find(".")
+    ai, af = a[:i], a[i + 1 :]
     assert a == f"{ai}.{af}"
     return ai, af
 
